@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@theme {
+  /* Jazz Pharmaceuticals brand colors */
+  --color-jazz-purple: #7d1761;
+  --color-jazz-purple-light: #9a2d7a;
+  --color-jazz-purple-dark: #5e1149;
+  --color-jazz-navy: #001c71;
+  --color-jazz-navy-light: #0a2d8a;
+  --color-jazz-gold: #f5d146;
+  --color-jazz-gold-light: #fae698;
+  --color-jazz-blue: #5a6ec7;
+  --color-jazz-bg: #fafafc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  background: var(--color-jazz-bg);
+  color: #1e293b;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Table number cells - tabular figures for alignment */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
