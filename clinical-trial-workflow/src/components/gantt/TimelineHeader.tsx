@@ -1,7 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useCallback } from "react";
 import type { Milestone } from "@/types";
+import { useWorkflowStore } from "@/store/workflowStore";
 import MilestoneMarker from "./MilestoneMarker";
 
 interface TimelineHeaderProps {
@@ -19,6 +20,7 @@ export default function TimelineHeader({
   originLabel,
   milestones,
 }: TimelineHeaderProps) {
+  const addMilestone = useWorkflowStore((s) => s.addMilestone);
   const totalMonths = rangeEnd - rangeStart + 1;
   const totalWidth = totalMonths * columnWidth;
 
@@ -32,6 +34,18 @@ export default function TimelineHeader({
     if (month < 0) return `${month}`;
     return `+${month}`;
   }
+
+  // Double-click on the milestone row to add a milestone at that month
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const month = Math.round(x / columnWidth + rangeStart);
+      const clampedMonth = Math.max(rangeStart, Math.min(rangeEnd, month));
+      addMilestone(clampedMonth);
+    },
+    [columnWidth, rangeStart, rangeEnd, addMilestone],
+  );
 
   return (
     <div
@@ -57,8 +71,12 @@ export default function TimelineHeader({
         })}
       </div>
 
-      {/* Milestone row — overflow-visible so tooltips can escape */}
-      <div className="relative h-5 overflow-visible">
+      {/* Milestone row — click to edit, double-click empty space to add */}
+      <div
+        className="relative h-5 overflow-visible cursor-crosshair"
+        onDoubleClick={handleDoubleClick}
+        title="Double-click to add a milestone"
+      >
         {milestones.map((ms) => (
           <MilestoneMarker
             key={ms.id}

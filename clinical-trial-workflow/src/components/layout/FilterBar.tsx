@@ -294,13 +294,16 @@ function AddSwimLanePopover({ onClose }: { onClose: () => void }) {
 // ---------------------------------------------------------------------------
 export default function FilterBar() {
   const swimLanes = useWorkflowStore((s) => s.template.swimLanes);
-  const totalActivities = useWorkflowStore((s) => s.template.activities.length);
+  const activities = useWorkflowStore((s) => s.template.activities);
+  const totalActivities = activities.length;
   const filters = useWorkflowStore((s) => s.filters);
   const updateFilters = useWorkflowStore((s) => s.updateFilters);
+  const deleteSwimLane = useWorkflowStore((s) => s.deleteSwimLane);
   const filteredActivities = useFilteredActivities();
 
   const [showAddLane, setShowAddLane] = useState(false);
   const [showEditLanes, setShowEditLanes] = useState(false);
+  const [confirmDeleteLane, setConfirmDeleteLane] = useState<string | null>(null);
 
   // Debounced search
   const [searchInput, setSearchInput] = useState(filters.searchQuery);
@@ -332,32 +335,45 @@ export default function FilterBar() {
   }, [filters.criticalPathOnly, updateFilters]);
 
   return (
-    <div className="flex items-center gap-2.5 border-b border-gray-200 bg-white px-4 py-1.5">
+    <div className="flex items-center gap-2.5 border-b border-gray-200 bg-white px-4 py-2.5">
       {/* Swim lane filters + management */}
-      <div className="relative flex items-center gap-1 overflow-x-auto">
+      <div className="relative flex items-center gap-1.5 flex-wrap py-1">
         {swimLanes.map((lane) => {
           const isActive =
             filters.swimLaneIds.length === 0 ||
             filters.swimLaneIds.includes(lane.id);
           return (
-            <button
-              key={lane.id}
-              type="button"
-              onClick={() => toggleSwimLane(lane.id)}
-              className={[
-                "inline-flex items-center whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-medium transition-all",
-                isActive
-                  ? "opacity-100 shadow-sm"
-                  : "opacity-30 grayscale",
-              ].join(" ")}
-              style={{
-                backgroundColor: isActive ? lane.color : "#e5e7eb",
-                color: isActive ? "#fff" : "#9ca3af",
-              }}
-              title={lane.name}
-            >
-              {lane.shortName}
-            </button>
+            <div key={lane.id} className="group/pill relative inline-flex">
+              <button
+                type="button"
+                onClick={() => toggleSwimLane(lane.id)}
+                className={[
+                  "inline-flex items-center whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-medium transition-all",
+                  isActive
+                    ? "opacity-100 shadow-sm"
+                    : "opacity-30 grayscale",
+                ].join(" ")}
+                style={{
+                  backgroundColor: isActive ? lane.color : "#e5e7eb",
+                  color: isActive ? "#fff" : "#9ca3af",
+                }}
+                title={lane.name}
+              >
+                {lane.shortName}
+              </button>
+              {/* Delete button on hover */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmDeleteLane(lane.id);
+                }}
+                className="absolute -top-1.5 -right-1.5 hidden group-hover/pill:flex items-center justify-center h-3.5 w-3.5 rounded-full bg-gray-700 text-white hover:bg-red-500 transition-colors shadow-sm"
+                title={`Delete ${lane.name}`}
+              >
+                <X size={8} strokeWidth={3} />
+              </button>
+            </div>
           );
         })}
 
@@ -439,6 +455,57 @@ export default function FilterBar() {
           ? `${totalActivities} activities`
           : `${filteredActivities.length} of ${totalActivities}`}
       </span>
+
+      {/* Delete lane confirmation modal */}
+      {confirmDeleteLane && (() => {
+        const lane = swimLanes.find((l) => l.id === confirmDeleteLane);
+        if (!lane) return null;
+        const count = activities.filter((a) => a.swimLaneId === lane.id).length;
+        return (
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30"
+            onClick={() => setConfirmDeleteLane(null)}
+          >
+            <div
+              className="w-[360px] rounded-lg bg-white p-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-sm font-semibold text-gray-900 mb-1">
+                Delete &ldquo;{lane.name}&rdquo;?
+              </h3>
+              <p className="text-xs text-gray-500 mb-4">
+                {count > 0
+                  ? `This will permanently remove the swim lane and its ${count} activit${count === 1 ? "y" : "ies"}. This action cannot be undone.`
+                  : "This will permanently remove the empty swim lane."}
+              </p>
+              {count > 0 && (
+                <div className="mb-4 rounded-md bg-red-50 border border-red-200 px-3 py-2">
+                  <span className="text-[11px] font-medium text-red-700">
+                    {count} activit{count === 1 ? "y" : "ies"} will be deleted
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setConfirmDeleteLane(null)}
+                  className="rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    deleteSwimLane(lane.id);
+                    setConfirmDeleteLane(null);
+                  }}
+                  className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700"
+                >
+                  Delete Lane
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

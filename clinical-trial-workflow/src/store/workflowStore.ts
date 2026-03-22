@@ -15,7 +15,7 @@ import {
   ExportPayload,
 } from '@/types';
 import { jazzPharmaTemplate } from '@/data/jazzPharmaTemplate';
-import { generateActivityId, generateSwimLaneId } from '@/utils/idGenerator';
+import { generateActivityId, generateMilestoneId, generateSwimLaneId } from '@/utils/idGenerator';
 import { temporalStore } from './undoMiddleware';
 import { computeCriticalPath } from '@/utils/criticalPath';
 
@@ -61,6 +61,8 @@ export interface WorkflowState {
   addDependency: (activityId: string, dep: Dependency) => void;
   removeDependency: (activityId: string, predecessorId: string) => void;
   updateMilestone: (id: string, updates: Partial<Milestone>) => void;
+  addMilestone: (month: number) => string;
+  deleteMilestone: (id: string) => void;
   updateSwimLane: (id: string, updates: Partial<SwimLane>) => void;
   addSwimLane: (name: string, color: string) => string;
   deleteSwimLane: (id: string) => void;
@@ -336,6 +338,45 @@ export const useWorkflowStore = create<WorkflowState>()(
         if (!milestone) return;
 
         Object.assign(milestone, updates);
+        state.template.updatedAt = new Date().toISOString();
+        state.isDirty = true;
+      });
+    },
+
+    addMilestone: (month: number): string => {
+      const newId = generateMilestoneId();
+      set((state) => {
+        snapshot(state.template);
+        const newMilestone: Milestone = {
+          id: newId,
+          name: 'New Milestone',
+          abbreviation: 'NEW',
+          month,
+          isCriticalPath: false,
+          swimLaneId: 'sl-001',
+          description: '',
+          gateType: 'informational',
+          gateApprovers: [],
+        };
+        state.template.milestones.push(newMilestone);
+        state.template.updatedAt = new Date().toISOString();
+        state.isDirty = true;
+      });
+      return newId;
+    },
+
+    deleteMilestone: (id: string) => {
+      set((state) => {
+        snapshot(state.template);
+        state.template.milestones = state.template.milestones.filter(
+          (m: Milestone) => m.id !== id,
+        );
+        // Clear milestoneGateId references
+        for (const activity of state.template.activities) {
+          if (activity.milestoneGateId === id) {
+            activity.milestoneGateId = null;
+          }
+        }
         state.template.updatedAt = new Date().toISOString();
         state.isDirty = true;
       });
