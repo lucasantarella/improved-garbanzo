@@ -363,6 +363,9 @@ export const jazzPharmaTemplate: WorkflowTemplate = {
     makeActivity('act-231', 'QA/QP Release of Finished IMP (Quality)', 'sl-013', 'Quality Assurance', 0, 1),
   ],
 
+  // ── Cycle Time Metrics ──────────────────────────────────────────────
+  cycleTimeMetrics: [],
+
   // ── Tags ─────────────────────────────────────────────────────────────
   tags: [
     { id: 'tag-strategy', name: 'strategy', color: '#818cf8' },

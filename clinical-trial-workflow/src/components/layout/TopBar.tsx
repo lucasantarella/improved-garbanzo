@@ -7,6 +7,7 @@ import {
   Redo2,
   Minus,
   Plus,
+  Timer,
 } from "lucide-react";
 import { useWorkflowStore } from "@/store/workflowStore";
 import { temporalStore } from "@/store/undoMiddleware";
@@ -30,6 +31,8 @@ export default function TopBar() {
   const activeView = useWorkflowStore((s) => s.activeView);
   const zoomLevel = useWorkflowStore((s) => s.zoomLevel);
   const setZoomLevel = useWorkflowStore((s) => s.setZoomLevel);
+  const showMetricsPanel = useWorkflowStore((s) => s.showMetricsPanel);
+  const toggleMetricsPanel = useWorkflowStore((s) => s.toggleMetricsPanel);
 
   const hasPast = temporalStore((s) => s.past.length > 0);
   const hasFuture = temporalStore((s) => s.future.length > 0);
@@ -155,6 +158,21 @@ export default function TopBar() {
           aria-label="Zoom in"
         />
       </div>
+
+      {/* Separator */}
+      <div className="h-6 w-px bg-gray-200" />
+
+      {/* Metrics toggle */}
+      <Button
+        variant={showMetricsPanel ? "primary" : "ghost"}
+        size="sm"
+        icon={Timer}
+        onClick={toggleMetricsPanel}
+        aria-label="Toggle cycle time metrics"
+        aria-pressed={showMetricsPanel}
+      >
+        Metrics
+      </Button>
 
       {/* Separator */}
       <div className="h-6 w-px bg-gray-200" />

@@ -59,6 +59,15 @@ const TimeConfigSchema = z.object({
   rangeEnd: z.number(),
 });
 
+const CycleTimeMetricSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  fromActivityId: z.string(),
+  fromPoint: z.enum(['start', 'end']),
+  toActivityId: z.string(),
+  toPoint: z.enum(['start', 'end']),
+});
+
 const TagSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -86,6 +95,7 @@ export const WorkflowTemplateSchema = z.object({
   milestones: z.array(MilestoneSchema),
   activities: z.array(ActivitySchema),
   tags: z.array(TagSchema),
+  cycleTimeMetrics: z.array(CycleTimeMetricSchema).optional().default([]),
   customFieldDefinitions: z.array(CustomFieldDefSchema),
 });
 

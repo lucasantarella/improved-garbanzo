@@ -63,6 +63,17 @@ export interface Activity {
   customFields: Record<string, unknown>;
 }
 
+export type MetricPointType = 'start' | 'end';
+
+export interface CycleTimeMetric {
+  id: string;
+  name: string;
+  fromActivityId: string;
+  fromPoint: MetricPointType;
+  toActivityId: string;
+  toPoint: MetricPointType;
+}
+
 export interface Tag {
   id: string;
   name: string;
@@ -90,6 +101,7 @@ export interface WorkflowTemplate {
   milestones: Milestone[];
   activities: Activity[];
   tags: Tag[];
+  cycleTimeMetrics: CycleTimeMetric[];
   customFieldDefinitions: CustomFieldDefinition[];
 }
 

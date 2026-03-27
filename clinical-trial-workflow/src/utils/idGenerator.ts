@@ -9,3 +9,6 @@ export function generateMilestoneId(): string {
 export function generateSwimLaneId(): string {
   return `sl-${uuidv4().substring(0, 8)}`;
 }
+export function generateMetricId(): string {
+  return `metric-${uuidv4().substring(0, 8)}`;
+}

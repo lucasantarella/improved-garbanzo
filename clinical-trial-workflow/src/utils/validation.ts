@@ -164,6 +164,20 @@ export function validateImport(jsonString: string): ValidationResult {
     errors.push(`Duplicate milestone ID found: "${dupId}".`);
   }
 
+  // Check cycle time metric references
+  for (const metric of workflowTemplate.cycleTimeMetrics ?? []) {
+    if (!activityIds.has(metric.fromActivityId)) {
+      warnings.push(
+        `Metric "${metric.name}" (${metric.id}) references non-existent "from" activity "${metric.fromActivityId}".`,
+      );
+    }
+    if (!activityIds.has(metric.toActivityId)) {
+      warnings.push(
+        `Metric "${metric.name}" (${metric.id}) references non-existent "to" activity "${metric.toActivityId}".`,
+      );
+    }
+  }
+
   // Check time range consistency
   if (workflowTemplate.timeConfig.rangeStart >= workflowTemplate.timeConfig.rangeEnd) {
     warnings.push(

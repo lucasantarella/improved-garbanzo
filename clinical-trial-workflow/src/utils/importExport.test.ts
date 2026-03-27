@@ -214,6 +214,83 @@ describe('Round-trip with user edits (edge cases)', () => {
   });
 });
 
+describe('Cycle time metrics round-trip', () => {
+  it('template with cycle time metrics round-trips', () => {
+    const template = structuredCloneTemplate(jazzPharmaTemplate);
+    template.cycleTimeMetrics = [
+      {
+        id: 'metric-001',
+        name: 'IND to FPD',
+        fromActivityId: template.activities[0].id,
+        fromPoint: 'end',
+        toActivityId: template.activities[10].id,
+        toPoint: 'start',
+      },
+    ];
+
+    const result = exportAndReimport(template);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('metric with missing activity reference produces warning', () => {
+    const template = structuredCloneTemplate(jazzPharmaTemplate);
+    template.cycleTimeMetrics = [
+      {
+        id: 'metric-002',
+        name: 'Bad Ref',
+        fromActivityId: 'nonexistent',
+        fromPoint: 'start',
+        toActivityId: template.activities[0].id,
+        toPoint: 'end',
+      },
+    ];
+
+    const result = exportAndReimport(template);
+    expect(result.valid).toBe(true); // warnings, not errors
+    expect(result.warnings.some((w) => w.includes('non-existent'))).toBe(true);
+  });
+
+  it('multiple metrics round-trip', () => {
+    const template = structuredCloneTemplate(jazzPharmaTemplate);
+    template.cycleTimeMetrics = [
+      {
+        id: 'metric-a',
+        name: 'Metric A',
+        fromActivityId: template.activities[0].id,
+        fromPoint: 'start',
+        toActivityId: template.activities[5].id,
+        toPoint: 'end',
+      },
+      {
+        id: 'metric-b',
+        name: 'Metric B',
+        fromActivityId: template.activities[5].id,
+        fromPoint: 'end',
+        toActivityId: template.activities[20].id,
+        toPoint: 'start',
+      },
+    ];
+
+    const result = exportAndReimport(template);
+    expect(result.valid).toBe(true);
+
+    const parsed: ExportPayload = JSON.parse(
+      JSON.stringify(buildExportPayload(template)),
+    );
+    expect(parsed.workflowTemplate.cycleTimeMetrics.length).toBe(2);
+  });
+
+  it('template without cycleTimeMetrics field imports (backward compat)', () => {
+    const template = structuredCloneTemplate(jazzPharmaTemplate);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (template as any).cycleTimeMetrics;
+
+    const result = exportAndReimport(template);
+    expect(result.valid).toBe(true);
+  });
+});
+
 describe('Validation catches real errors', () => {
   it('rejects invalid JSON', () => {
     const result = validateImport('not json{{{');

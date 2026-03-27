@@ -10,12 +10,13 @@ import {
   Dependency,
   Milestone,
   SwimLane,
+  CycleTimeMetric,
   ViewMode,
   FilterState,
   ExportPayload,
 } from '@/types';
 import { jazzPharmaTemplate } from '@/data/jazzPharmaTemplate';
-import { generateActivityId, generateMilestoneId, generateSwimLaneId } from '@/utils/idGenerator';
+import { generateActivityId, generateMilestoneId, generateSwimLaneId, generateMetricId } from '@/utils/idGenerator';
 import { temporalStore } from './undoMiddleware';
 import { computeCriticalPath } from '@/utils/criticalPath';
 
@@ -46,6 +47,7 @@ export interface WorkflowState {
   isDirty: boolean;
   collapsedLanes: Set<string>;
   showDependencies: boolean;
+  showMetricsPanel: boolean;
 
   // Actions
   setActiveView: (view: ViewMode) => void;
@@ -66,6 +68,10 @@ export interface WorkflowState {
   updateSwimLane: (id: string, updates: Partial<SwimLane>) => void;
   addSwimLane: (name: string, color: string) => string;
   deleteSwimLane: (id: string) => void;
+  addCycleTimeMetric: (metric: Omit<CycleTimeMetric, 'id'>) => string;
+  updateCycleTimeMetric: (id: string, updates: Partial<CycleTimeMetric>) => void;
+  deleteCycleTimeMetric: (id: string) => void;
+  toggleMetricsPanel: () => void;
   updateTemplateMeta: (
     updates: Partial<
       Pick<WorkflowTemplate, 'name' | 'description' | 'version' | 'author' | 'client'>
@@ -106,6 +112,7 @@ export const useWorkflowStore = create<WorkflowState>()(
     isDirty: false,
     collapsedLanes: new Set<string>(),
     showDependencies: false,
+    showMetricsPanel: false,
 
     // ---- View / UI actions (no template mutation, no snapshot) ----
 
@@ -441,6 +448,50 @@ export const useWorkflowStore = create<WorkflowState>()(
       });
     },
 
+    addCycleTimeMetric: (metric: Omit<CycleTimeMetric, 'id'>): string => {
+      const newId = generateMetricId();
+      set((state) => {
+        snapshot(state.template);
+        if (!state.template.cycleTimeMetrics) {
+          state.template.cycleTimeMetrics = [];
+        }
+        state.template.cycleTimeMetrics.push({ id: newId, ...metric } as CycleTimeMetric);
+        state.template.updatedAt = new Date().toISOString();
+        state.isDirty = true;
+      });
+      return newId;
+    },
+
+    updateCycleTimeMetric: (id: string, updates: Partial<CycleTimeMetric>) => {
+      set((state) => {
+        snapshot(state.template);
+        const metric = (state.template.cycleTimeMetrics ?? []).find(
+          (m: CycleTimeMetric) => m.id === id,
+        );
+        if (!metric) return;
+        Object.assign(metric, updates);
+        state.template.updatedAt = new Date().toISOString();
+        state.isDirty = true;
+      });
+    },
+
+    deleteCycleTimeMetric: (id: string) => {
+      set((state) => {
+        snapshot(state.template);
+        state.template.cycleTimeMetrics = (state.template.cycleTimeMetrics ?? []).filter(
+          (m: CycleTimeMetric) => m.id !== id,
+        );
+        state.template.updatedAt = new Date().toISOString();
+        state.isDirty = true;
+      });
+    },
+
+    toggleMetricsPanel: () => {
+      set((state) => {
+        state.showMetricsPanel = !state.showMetricsPanel;
+      });
+    },
+
     updateTemplateMeta: (
       updates: Partial<
         Pick<WorkflowTemplate, 'name' | 'description' | 'version' | 'author' | 'client'>
@@ -594,4 +645,49 @@ export function useActivitiesByLane(): Record<string, Activity[]> {
     }
     return byLane;
   }, [filtered]);
+}
+
+/**
+ * Computes each cycle-time metric's value in months.
+ * Returns null for a metric if either referenced activity is missing.
+ */
+export interface ComputedMetric {
+  metric: CycleTimeMetric;
+  months: number | null;
+  fromActivityName: string;
+  toActivityName: string;
+}
+
+export function useComputedCycleTimeMetrics(): ComputedMetric[] {
+  const activities = useWorkflowStore((s) => s.template.activities);
+  const metrics = useWorkflowStore((s) => s.template.cycleTimeMetrics ?? []);
+
+  return useMemo(() => {
+    const actMap = new Map<string, Activity>();
+    for (const a of activities) actMap.set(a.id, a);
+
+    return metrics.map((m) => {
+      const fromAct = actMap.get(m.fromActivityId);
+      const toAct = actMap.get(m.toActivityId);
+
+      if (!fromAct || !toAct) {
+        return {
+          metric: m,
+          months: null,
+          fromActivityName: fromAct?.name ?? '(deleted)',
+          toActivityName: toAct?.name ?? '(deleted)',
+        };
+      }
+
+      const fromValue = m.fromPoint === 'start' ? fromAct.startMonth : fromAct.endMonth;
+      const toValue = m.toPoint === 'start' ? toAct.startMonth : toAct.endMonth;
+
+      return {
+        metric: m,
+        months: toValue - fromValue,
+        fromActivityName: fromAct.name,
+        toActivityName: toAct.name,
+      };
+    });
+  }, [activities, metrics]);
 }
