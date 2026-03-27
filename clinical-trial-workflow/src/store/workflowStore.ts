@@ -116,7 +116,7 @@ export const useWorkflowStore = create<WorkflowState>()(
     },
 
     setZoomLevel: (level: number) => {
-      const clamped = Math.max(1, Math.min(3, level));
+      const clamped = Math.max(1, Math.min(4, level));
       set((state) => {
         state.zoomLevel = clamped;
       });

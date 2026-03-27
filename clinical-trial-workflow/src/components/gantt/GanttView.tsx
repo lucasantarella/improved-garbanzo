@@ -67,7 +67,7 @@ export default function GanttView() {
   const activitiesByLane = useActivitiesByLane();
   const criticalIds = useCriticalPathIds();
 
-  const columnWidth = zoomLevel === 1 ? 40 : zoomLevel === 2 ? 80 : 160;
+  const columnWidth = zoomLevel === 1 ? 40 : zoomLevel === 2 ? 80 : zoomLevel === 3 ? 160 : 480;
   const totalMonths = timeConfig.rangeEnd - timeConfig.rangeStart + 1;
   const timelineWidth = totalMonths * columnWidth;
 
@@ -303,6 +303,7 @@ export default function GanttView() {
           columnWidth={columnWidth}
           originLabel={timeConfig.originLabel}
           milestones={milestones}
+          zoomLevel={zoomLevel}
         />
 
         {/* Timeline body */}
@@ -321,6 +322,22 @@ export default function GanttView() {
               style={{ left: i * columnWidth, width: 0 }}
             />
           ))}
+
+          {/* Day-level sub-grid lines at zoom level 4 */}
+          {zoomLevel === 4 &&
+            Array.from({ length: totalMonths }).map((_, monthIdx) => {
+              const dayWidth = columnWidth / 30;
+              return Array.from({ length: 29 }).map((__, dayIdx) => (
+                <div
+                  key={`day-grid-${monthIdx}-${dayIdx}`}
+                  className="absolute top-0 h-full border-r border-gray-50"
+                  style={{
+                    left: monthIdx * columnWidth + (dayIdx + 1) * dayWidth,
+                    width: 0,
+                  }}
+                />
+              ));
+            })}
 
           {/* Origin (month 0) highlight line */}
           {timeConfig.rangeStart <= 0 && timeConfig.rangeEnd >= 0 && (
@@ -367,6 +384,7 @@ export default function GanttView() {
                   rangeEnd={timeConfig.rangeEnd}
                   criticalPathFilterActive={criticalPathFilterActive}
                   isCritical={criticalIds.has(row.activity.id)}
+                  zoomLevel={zoomLevel}
                 />
               </div>
             );

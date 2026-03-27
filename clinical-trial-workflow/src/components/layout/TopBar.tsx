@@ -19,6 +19,7 @@ const ZOOM_LABELS: Record<number, string> = {
   1: "Quarter",
   2: "Month",
   3: "Week",
+  4: "Day",
 };
 
 export default function TopBar() {
@@ -150,7 +151,7 @@ export default function TopBar() {
           size="sm"
           icon={Plus}
           onClick={() => setZoomLevel(zoomLevel + 1)}
-          disabled={zoomLevel >= 3}
+          disabled={zoomLevel >= 4}
           aria-label="Zoom in"
         />
       </div>

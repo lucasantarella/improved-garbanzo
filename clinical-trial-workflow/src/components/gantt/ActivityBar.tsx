@@ -13,10 +13,16 @@ interface ActivityBarProps {
   rangeEnd: number;
   criticalPathFilterActive: boolean;
   isCritical: boolean;
+  zoomLevel?: number;
 }
 
-/** Snap a value to the nearest 0.5 increment. */
-function snap(value: number): number {
+/** Snap a value to the nearest increment based on zoom level.
+ *  Zoom 1-3: 0.5 month increments.
+ *  Zoom 4 (Day): ~1/30 month increments (1 day). */
+function snap(value: number, zoomLevel: number = 2): number {
+  if (zoomLevel >= 4) {
+    return Math.round(value * 30) / 30;
+  }
   return Math.round(value * 2) / 2;
 }
 
@@ -39,6 +45,7 @@ export default function ActivityBar({
   rangeEnd,
   criticalPathFilterActive,
   isCritical,
+  zoomLevel = 2,
 }: ActivityBarProps) {
   const selectedActivityId = useWorkflowStore((s) => s.selectedActivityId);
   const setSelectedActivity = useWorkflowStore((s) => s.setSelectedActivity);
@@ -91,17 +98,18 @@ export default function ActivityBar({
       const monthDelta = dx / columnWidth;
 
       if (dragRef.current.type === "move") {
-        const snapped = snap(monthDelta);
+        const snapped = snap(monthDelta, zoomLevel);
         setDragDelta({ dStart: snapped, dDuration: 0 });
       } else {
-        const snapped = snap(monthDelta);
+        const snapped = snap(monthDelta, zoomLevel);
         const newDuration = dragRef.current.origDuration + snapped;
-        if (newDuration >= 0.5) {
+        const minDuration = zoomLevel >= 4 ? 1 / 30 : 0.5;
+        if (newDuration >= minDuration) {
           setDragDelta({ dStart: 0, dDuration: snapped });
         }
       }
     },
-    [columnWidth],
+    [columnWidth, zoomLevel],
   );
 
   const handlePointerUp = useCallback(
@@ -110,13 +118,15 @@ export default function ActivityBar({
       (e.target as HTMLElement).releasePointerCapture(e.pointerId);
 
       if (dragRef.current.type === "move" && dragDelta.dStart !== 0) {
-        const newStart = snap(dragRef.current.origStart + dragDelta.dStart);
+        const newStart = snap(dragRef.current.origStart + dragDelta.dStart, zoomLevel);
         updateActivity(activity.id, { startMonth: newStart });
       } else if (dragRef.current.type === "resize" && dragDelta.dDuration !== 0) {
         const newDuration = snap(
           dragRef.current.origDuration + dragDelta.dDuration,
+          zoomLevel,
         );
-        if (newDuration >= 0.5) {
+        const minDuration = zoomLevel >= 4 ? 1 / 30 : 0.5;
+        if (newDuration >= minDuration) {
           updateActivity(activity.id, { durationMonths: newDuration });
         }
       }
@@ -124,7 +134,7 @@ export default function ActivityBar({
       dragRef.current = null;
       setDragDelta({ dStart: 0, dDuration: 0 });
     },
-    [activity.id, dragDelta, updateActivity],
+    [activity.id, dragDelta, updateActivity, zoomLevel],
   );
 
   const cpClasses = criticalPathClasses(
@@ -191,7 +201,9 @@ export default function ActivityBar({
           <div className="font-semibold">{activity.name}</div>
           <div className="text-gray-300">
             Start: {activity.startMonth} &middot; Duration:{" "}
-            {activity.durationMonths}mo &middot; End: {activity.endMonth}
+            {activity.durationMonths}mo
+            {zoomLevel >= 4 && ` (~${Math.round(activity.durationMonths * 30)}d)`}
+            {" "}&middot; End: {activity.endMonth}
           </div>
           {isCritical && (
             <div className="text-red-400 text-[10px]">Critical Path</div>

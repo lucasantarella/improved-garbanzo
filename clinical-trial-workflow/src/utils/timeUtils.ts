@@ -7,3 +7,7 @@ export function monthToLabel(month: number): string {
 export function monthsToWeeks(months: number): number {
   return Math.round(months * 4.3);
 }
+
+export function monthsToDays(months: number): number {
+  return Math.round(months * 30);
+}

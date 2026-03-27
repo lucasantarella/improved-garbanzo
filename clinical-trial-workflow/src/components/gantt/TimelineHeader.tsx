@@ -11,6 +11,7 @@ interface TimelineHeaderProps {
   columnWidth: number;
   originLabel: string;
   milestones: Milestone[];
+  zoomLevel: number;
 }
 
 export default function TimelineHeader({
@@ -19,6 +20,7 @@ export default function TimelineHeader({
   columnWidth,
   originLabel,
   milestones,
+  zoomLevel,
 }: TimelineHeaderProps) {
   const addMilestone = useWorkflowStore((s) => s.addMilestone);
   const totalMonths = rangeEnd - rangeStart + 1;
@@ -70,6 +72,28 @@ export default function TimelineHeader({
           );
         })}
       </div>
+
+      {/* Day sub-labels row (zoom level 4 only) */}
+      {zoomLevel === 4 && (
+        <div className="relative h-4 flex border-t border-gray-100">
+          {months.map((m) => {
+            const monthLeft = (m - rangeStart) * columnWidth;
+            const dayWidth = columnWidth / 30;
+            return Array.from({ length: 30 }).map((_, d) => (
+              <div
+                key={`day-${m}-${d}`}
+                className="absolute top-0 h-full flex items-center justify-center text-[8px] text-gray-400 border-r border-gray-50"
+                style={{
+                  left: monthLeft + d * dayWidth,
+                  width: dayWidth,
+                }}
+              >
+                {(d + 1) % 5 === 0 ? d + 1 : ""}
+              </div>
+            ));
+          })}
+        </div>
+      )}
 
       {/* Milestone row — click to edit, double-click empty space to add */}
       <div
