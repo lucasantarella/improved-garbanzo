@@ -19,8 +19,15 @@ const POINT_OPTIONS: { value: MetricPointType; label: string }[] = [
 
 export default function MetricEditor({ onClose, existing }: MetricEditorProps) {
   const activities = useWorkflowStore((s) => s.template.activities);
+  const swimLanes = useWorkflowStore((s) => s.template.swimLanes);
   const addMetric = useWorkflowStore((s) => s.addCycleTimeMetric);
   const updateMetric = useWorkflowStore((s) => s.updateCycleTimeMetric);
+
+  const laneMap = useMemo(() => {
+    const map = new Map<string, { name: string; shortName: string; color: string }>();
+    for (const l of swimLanes) map.set(l.id, { name: l.name, shortName: l.shortName, color: l.color });
+    return map;
+  }, [swimLanes]);
 
   const [name, setName] = useState(existing?.name ?? "");
   const [fromId, setFromId] = useState<string | null>(
@@ -146,10 +153,12 @@ export default function MetricEditor({ onClose, existing }: MetricEditorProps) {
             />
           </div>
           <div className="mt-1 max-h-32 overflow-y-auto rounded-md border border-gray-200 bg-white">
-            {filteredFrom.length === 0 ? (
+            {filteredFrom.length === 0 && (
               <p className="px-3 py-2 text-sm text-gray-400">No results</p>
-            ) : (
-              filteredFrom.map((a) => (
+            )}
+            {filteredFrom.map((a) => {
+              const lane = laneMap.get(a.swimLaneId);
+              return (
                 <button
                   key={a.id}
                   type="button"
@@ -157,16 +166,25 @@ export default function MetricEditor({ onClose, existing }: MetricEditorProps) {
                     setFromId(a.id);
                     setError(null);
                   }}
-                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-blue-50 truncate ${
+                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-blue-50 flex items-center gap-1.5 ${
                     fromId === a.id
                       ? "bg-blue-50 text-blue-700"
                       : "text-gray-700"
                   }`}
                 >
-                  {a.name}
+                  {lane && (
+                    <span
+                      className="inline-block shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold leading-tight text-white"
+                      style={{ backgroundColor: lane.color }}
+                      title={lane.name}
+                    >
+                      {lane.shortName}
+                    </span>
+                  )}
+                  <span className="truncate">{a.name}</span>
                 </button>
-              ))
-            )}
+              );
+            })}
           </div>
           {fromName && (
             <p className="mt-1 text-xs text-blue-600">
@@ -210,10 +228,12 @@ export default function MetricEditor({ onClose, existing }: MetricEditorProps) {
             />
           </div>
           <div className="mt-1 max-h-32 overflow-y-auto rounded-md border border-gray-200 bg-white">
-            {filteredTo.length === 0 ? (
+            {filteredTo.length === 0 && (
               <p className="px-3 py-2 text-sm text-gray-400">No results</p>
-            ) : (
-              filteredTo.map((a) => (
+            )}
+            {filteredTo.map((a) => {
+              const lane = laneMap.get(a.swimLaneId);
+              return (
                 <button
                   key={a.id}
                   type="button"
@@ -221,16 +241,25 @@ export default function MetricEditor({ onClose, existing }: MetricEditorProps) {
                     setToId(a.id);
                     setError(null);
                   }}
-                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-blue-50 truncate ${
+                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-blue-50 flex items-center gap-1.5 ${
                     toId === a.id
                       ? "bg-blue-50 text-blue-700"
                       : "text-gray-700"
                   }`}
                 >
-                  {a.name}
+                  {lane && (
+                    <span
+                      className="inline-block shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold leading-tight text-white"
+                      style={{ backgroundColor: lane.color }}
+                      title={lane.name}
+                    >
+                      {lane.shortName}
+                    </span>
+                  )}
+                  <span className="truncate">{a.name}</span>
                 </button>
-              ))
-            )}
+              );
+            })}
           </div>
           {toName && (
             <p className="mt-1 text-xs text-blue-600">
