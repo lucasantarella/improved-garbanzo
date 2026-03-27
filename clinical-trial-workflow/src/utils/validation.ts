@@ -117,7 +117,7 @@ export function validateImport(jsonString: string): ValidationResult {
   // Step 4: Temporal consistency checks
   for (const activity of workflowTemplate.activities) {
     const expectedEnd = activity.startMonth + activity.durationMonths;
-    if (Math.abs(activity.endMonth - expectedEnd) > 1e-9) {
+    if (Math.abs(activity.endMonth - expectedEnd) > 0.001) {
       errors.push(
         `Activity "${activity.name}" (${activity.id}) has inconsistent timing: ` +
           `endMonth (${activity.endMonth}) !== startMonth (${activity.startMonth}) + durationMonths (${activity.durationMonths}) = ${expectedEnd}.`,

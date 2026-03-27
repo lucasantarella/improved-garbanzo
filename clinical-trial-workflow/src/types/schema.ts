@@ -8,7 +8,7 @@ const DependencySchema = z.object({
 
 const ActivitySchema = z.object({
   id: z.string(),
-  name: z.string().min(1),
+  name: z.string(),
   swimLaneId: z.string(),
   startMonth: z.number(),
   durationMonths: z.number().min(0),
@@ -30,7 +30,7 @@ const ActivitySchema = z.object({
 
 const SwimLaneSchema = z.object({
   id: z.string(),
-  name: z.string().min(1),
+  name: z.string(),
   shortName: z.string(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   order: z.number().int().min(0),
@@ -41,7 +41,7 @@ const SwimLaneSchema = z.object({
 
 const MilestoneSchema = z.object({
   id: z.string(),
-  name: z.string().min(1),
+  name: z.string(),
   abbreviation: z.string(),
   month: z.number(),
   isCriticalPath: z.boolean(),
@@ -74,7 +74,7 @@ const CustomFieldDefSchema = z.object({
 
 export const WorkflowTemplateSchema = z.object({
   id: z.string(),
-  name: z.string().min(1),
+  name: z.string(),
   version: z.string(),
   description: z.string(),
   createdAt: z.string(),
