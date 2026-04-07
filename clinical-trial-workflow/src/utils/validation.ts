@@ -105,12 +105,20 @@ export function validateImport(jsonString: string): ValidationResult {
     }
   }
 
-  // Check milestone swimLaneId references
+  // Check milestone swimLaneId references and dependency references
   for (const milestone of workflowTemplate.milestones) {
     if (!swimLaneIds.has(milestone.swimLaneId)) {
       errors.push(
         `Milestone "${milestone.name}" (${milestone.id}) references non-existent swim lane "${milestone.swimLaneId}".`,
       );
+    }
+
+    for (const dep of milestone.dependencies ?? []) {
+      if (!activityIds.has(dep.predecessorId)) {
+        errors.push(
+          `Milestone "${milestone.name}" (${milestone.id}) has dependency on non-existent activity "${dep.predecessorId}".`,
+        );
+      }
     }
   }
 

@@ -33,6 +33,44 @@ function snapshot(template: WorkflowTemplate): void {
   temporalStore.getState().pushState(structuredCloneTemplate(template));
 }
 
+/**
+ * Compute a milestone's month from its dependencies on activities.
+ * Returns the latest dependency endpoint, or null if there are no valid dependencies.
+ * For FS/SS the milestone sits at the predecessor's end/start + lag.
+ * FF/SF also resolve to the predecessor's end/start + lag (milestone has zero duration).
+ */
+function computeMilestoneMonth(milestone: Milestone, activities: Activity[]): number | null {
+  if (milestone.dependencies.length === 0) return null;
+
+  const actMap = new Map<string, Activity>();
+  for (const a of activities) actMap.set(a.id, a);
+
+  let latest = -Infinity;
+  let hasValid = false;
+
+  for (const dep of milestone.dependencies) {
+    const pred = actMap.get(dep.predecessorId);
+    if (!pred) continue;
+
+    let value: number;
+    switch (dep.type) {
+      case 'FS': // milestone after predecessor finishes
+      case 'FF': // same semantics for zero-duration milestone
+        value = pred.endMonth + dep.lagMonths;
+        break;
+      case 'SS': // milestone at predecessor start
+      case 'SF': // same semantics for zero-duration milestone
+        value = pred.startMonth + dep.lagMonths;
+        break;
+    }
+
+    latest = Math.max(latest, value);
+    hasValid = true;
+  }
+
+  return hasValid ? latest : null;
+}
+
 // ---------------------------------------------------------------------------
 // Store types
 // ---------------------------------------------------------------------------
@@ -65,6 +103,8 @@ export interface WorkflowState {
   updateMilestone: (id: string, updates: Partial<Milestone>) => void;
   addMilestone: (month: number) => string;
   deleteMilestone: (id: string) => void;
+  addMilestoneDependency: (milestoneId: string, dep: Dependency) => void;
+  removeMilestoneDependency: (milestoneId: string, predecessorId: string) => void;
   updateSwimLane: (id: string, updates: Partial<SwimLane>) => void;
   addSwimLane: (name: string, color: string) => string;
   deleteSwimLane: (id: string) => void;
@@ -177,6 +217,14 @@ export const useWorkflowStore = create<WorkflowState>()(
         // Recompute endMonth when startMonth or durationMonths changes
         if ('startMonth' in updates || 'durationMonths' in updates) {
           activity.endMonth = activity.startMonth + activity.durationMonths;
+
+          // Recompute any milestones that depend on this activity
+          for (const ms of state.template.milestones) {
+            if (ms.dependencies.some((d: Dependency) => d.predecessorId === id)) {
+              const computed = computeMilestoneMonth(ms, state.template.activities);
+              if (computed !== null) ms.month = computed;
+            }
+          }
         }
 
         state.template.updatedAt = new Date().toISOString();
@@ -302,6 +350,19 @@ export const useWorkflowStore = create<WorkflowState>()(
           );
         }
 
+        // Also remove milestone dependencies referencing this activity
+        for (const ms of state.template.milestones) {
+          const hadDep = ms.dependencies.some((d: Dependency) => d.predecessorId === id);
+          if (hadDep) {
+            ms.dependencies = ms.dependencies.filter(
+              (d: Dependency) => d.predecessorId !== id,
+            );
+            // Recompute month from remaining dependencies
+            const computed = computeMilestoneMonth(ms, state.template.activities);
+            if (computed !== null) ms.month = computed;
+          }
+        }
+
         state.template.updatedAt = new Date().toISOString();
         state.isDirty = true;
 
@@ -364,6 +425,7 @@ export const useWorkflowStore = create<WorkflowState>()(
           description: '',
           gateType: 'informational',
           gateApprovers: [],
+          dependencies: [],
         };
         state.template.milestones.push(newMilestone);
         state.template.updatedAt = new Date().toISOString();
@@ -384,6 +446,46 @@ export const useWorkflowStore = create<WorkflowState>()(
             activity.milestoneGateId = null;
           }
         }
+        state.template.updatedAt = new Date().toISOString();
+        state.isDirty = true;
+      });
+    },
+
+    addMilestoneDependency: (milestoneId: string, dep: Dependency) => {
+      set((state) => {
+        snapshot(state.template);
+        const milestone = state.template.milestones.find((m: Milestone) => m.id === milestoneId);
+        if (!milestone) return;
+
+        milestone.dependencies.push(dep);
+
+        // Recompute milestone month from dependencies
+        const computed = computeMilestoneMonth(milestone, state.template.activities);
+        if (computed !== null) {
+          milestone.month = computed;
+        }
+
+        state.template.updatedAt = new Date().toISOString();
+        state.isDirty = true;
+      });
+    },
+
+    removeMilestoneDependency: (milestoneId: string, predecessorId: string) => {
+      set((state) => {
+        snapshot(state.template);
+        const milestone = state.template.milestones.find((m: Milestone) => m.id === milestoneId);
+        if (!milestone) return;
+
+        milestone.dependencies = milestone.dependencies.filter(
+          (d: Dependency) => d.predecessorId !== predecessorId,
+        );
+
+        // Recompute milestone month from remaining dependencies
+        const computed = computeMilestoneMonth(milestone, state.template.activities);
+        if (computed !== null) {
+          milestone.month = computed;
+        }
+
         state.template.updatedAt = new Date().toISOString();
         state.isDirty = true;
       });

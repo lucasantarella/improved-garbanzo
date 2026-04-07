@@ -1,15 +1,19 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { Trash2 } from "lucide-react";
-import type { Milestone, GateType } from "@/types";
+import { Trash2, X, Plus, Search } from "lucide-react";
+import type { Milestone, GateType, DependencyType } from "@/types";
 import { useWorkflowStore } from "@/store/workflowStore";
 
 interface MilestoneMarkerProps {
   milestone: Milestone;
   columnWidth: number;
   rangeStart: number;
+  /** Which stacking row this marker occupies (0 = top) */
+  row: number;
+  /** Height of each stacking slot in px */
+  slotHeight: number;
 }
 
 const GATE_COLORS: Record<string, string> = {
@@ -24,6 +28,15 @@ const GATE_OPTIONS: { value: GateType; label: string }[] = [
   { value: "informational", label: "Informational" },
 ];
 
+const DEP_TYPE_LABELS: Record<DependencyType, string> = {
+  FS: "Finish → Start",
+  SS: "Start → Start",
+  FF: "Finish → Finish",
+  SF: "Start → Finish",
+};
+
+const DEP_TYPE_OPTIONS: DependencyType[] = ["FS", "SS", "FF", "SF"];
+
 function MilestoneEditPopover({
   milestone,
   position,
@@ -35,6 +48,9 @@ function MilestoneEditPopover({
 }) {
   const updateMilestone = useWorkflowStore((s) => s.updateMilestone);
   const deleteMilestone = useWorkflowStore((s) => s.deleteMilestone);
+  const addMilestoneDependency = useWorkflowStore((s) => s.addMilestoneDependency);
+  const removeMilestoneDependency = useWorkflowStore((s) => s.removeMilestoneDependency);
+  const activities = useWorkflowStore((s) => s.template.activities);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   const [name, setName] = useState(milestone.name);
@@ -43,6 +59,39 @@ function MilestoneEditPopover({
   const [gateType, setGateType] = useState<GateType>(milestone.gateType);
   const [isCriticalPath, setIsCriticalPath] = useState(milestone.isCriticalPath);
 
+  // Dependency adding state
+  const [showDepPicker, setShowDepPicker] = useState(false);
+  const [depSearch, setDepSearch] = useState("");
+  const [depType, setDepType] = useState<DependencyType>("FS");
+  const [depLag, setDepLag] = useState(0);
+
+  const hasDependencies = milestone.dependencies.length > 0;
+
+  const activityMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of activities) map.set(a.id, a.name);
+    return map;
+  }, [activities]);
+
+  const existingDepIds = useMemo(
+    () => new Set(milestone.dependencies.map((d) => d.predecessorId)),
+    [milestone.dependencies],
+  );
+
+  const filteredCandidates = useMemo(() => {
+    const candidates = activities.filter(
+      (a) => !existingDepIds.has(a.id),
+    );
+    if (!depSearch.trim()) return candidates;
+    const q = depSearch.toLowerCase();
+    return candidates.filter((a) => a.name.toLowerCase().includes(q));
+  }, [activities, existingDepIds, depSearch]);
+
+  // Keep month in sync when milestone has dependencies (it's computed)
+  useEffect(() => {
+    setMonth(milestone.month);
+  }, [milestone.month]);
+
   // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -50,7 +99,6 @@ function MilestoneEditPopover({
         onClose();
       }
     };
-    // Delay to avoid immediate close from the click that opened it
     const timer = setTimeout(() => {
       document.addEventListener("mousedown", handler);
     }, 0);
@@ -61,15 +109,18 @@ function MilestoneEditPopover({
   }, [onClose]);
 
   const handleSave = useCallback(() => {
-    updateMilestone(milestone.id, {
+    const updates: Partial<Milestone> = {
       name: name.trim() || milestone.name,
       abbreviation: abbreviation.trim() || milestone.abbreviation,
-      month,
       gateType,
       isCriticalPath,
-    });
+    };
+    if (!hasDependencies) {
+      updates.month = month;
+    }
+    updateMilestone(milestone.id, updates);
     onClose();
-  }, [milestone, name, abbreviation, month, gateType, isCriticalPath, updateMilestone, onClose]);
+  }, [milestone, name, abbreviation, month, gateType, isCriticalPath, hasDependencies, updateMilestone, onClose]);
 
   const handleDelete = useCallback(() => {
     if (window.confirm(`Delete milestone "${milestone.name}"?`)) {
@@ -86,7 +137,27 @@ function MilestoneEditPopover({
     [handleSave, onClose],
   );
 
-  // Position: try below the marker, but flip up if near bottom of viewport
+  const handleAddDep = useCallback(
+    (activityId: string) => {
+      addMilestoneDependency(milestone.id, {
+        predecessorId: activityId,
+        type: depType,
+        lagMonths: depLag,
+      });
+      setDepSearch("");
+      setShowDepPicker(false);
+      setDepLag(0);
+    },
+    [milestone.id, depType, depLag, addMilestoneDependency],
+  );
+
+  const handleRemoveDep = useCallback(
+    (predecessorId: string) => {
+      removeMilestoneDependency(milestone.id, predecessorId);
+    },
+    [milestone.id, removeMilestoneDependency],
+  );
+
   const popoverStyle: React.CSSProperties = {
     left: position.x,
     top: position.y,
@@ -96,7 +167,7 @@ function MilestoneEditPopover({
   return createPortal(
     <div
       ref={popoverRef}
-      className="fixed z-[9999] w-[280px] rounded-lg border border-gray-200 bg-white shadow-xl"
+      className="fixed z-[9999] w-[320px] max-h-[80vh] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-xl"
       style={popoverStyle}
     >
       {/* Header */}
@@ -139,13 +210,21 @@ function MilestoneEditPopover({
             />
           </div>
           <div className="w-20">
-            <label className="block text-[11px] font-medium text-gray-500 mb-0.5">Month</label>
+            <label className="block text-[11px] font-medium text-gray-500 mb-0.5">
+              Month
+              {hasDependencies && (
+                <span className="text-[9px] text-amber-500 ml-0.5" title="Computed from dependencies">(auto)</span>
+              )}
+            </label>
             <input
               type="number"
-              value={month}
+              value={Math.round(month * 100) / 100}
               onChange={(e) => setMonth(Number(e.target.value))}
               onKeyDown={handleKeyDown}
-              className="w-full rounded border border-gray-200 px-2 py-1 text-xs tabular-nums text-right outline-none focus:border-jazz-purple/40 focus:ring-1 focus:ring-jazz-purple/30"
+              disabled={hasDependencies}
+              className={`w-full rounded border border-gray-200 px-2 py-1 text-xs tabular-nums text-right outline-none focus:border-jazz-purple/40 focus:ring-1 focus:ring-jazz-purple/30 ${
+                hasDependencies ? "bg-gray-50 text-gray-400 cursor-not-allowed" : ""
+              }`}
             />
           </div>
         </div>
@@ -187,6 +266,136 @@ function MilestoneEditPopover({
           <span className="text-xs text-gray-600">Critical path</span>
         </label>
 
+        {/* Dependencies section */}
+        <div>
+          <label className="block text-[11px] font-medium text-gray-500 mb-1">
+            Dependencies
+            {hasDependencies && (
+              <span className="text-[9px] text-gray-400 ml-1">(month computed from these)</span>
+            )}
+          </label>
+
+          {/* Existing dependencies */}
+          {milestone.dependencies.length > 0 && (
+            <div className="space-y-1 mb-1.5">
+              {milestone.dependencies.map((dep) => (
+                <div
+                  key={dep.predecessorId}
+                  className="flex items-center gap-1 rounded border border-gray-100 bg-gray-50 px-2 py-1"
+                >
+                  <span className="rounded bg-jazz-purple/10 px-1 py-0.5 text-[9px] font-bold text-jazz-purple">
+                    {dep.type}
+                  </span>
+                  <span className="flex-1 truncate text-[11px] text-gray-700">
+                    {activityMap.get(dep.predecessorId) ?? dep.predecessorId}
+                  </span>
+                  {dep.lagMonths !== 0 && (
+                    <span className="text-[9px] text-gray-400">
+                      {dep.lagMonths > 0 ? "+" : ""}{dep.lagMonths}m
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveDep(dep.predecessorId)}
+                    className="rounded p-0.5 text-gray-300 hover:bg-red-50 hover:text-red-500 transition-colors"
+                    title="Remove dependency"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add dependency button / picker */}
+          {!showDepPicker ? (
+            <button
+              type="button"
+              onClick={() => setShowDepPicker(true)}
+              className="flex items-center gap-1 rounded border border-dashed border-gray-300 px-2 py-1 text-[11px] text-gray-500 hover:border-jazz-purple hover:text-jazz-purple transition-colors w-full justify-center"
+            >
+              <Plus size={10} />
+              Add dependency
+            </button>
+          ) : (
+            <div className="rounded border border-gray-200 bg-gray-50 p-2 space-y-1.5">
+              {/* Dependency type selector */}
+              <div className="flex gap-1">
+                {DEP_TYPE_OPTIONS.map((dt) => (
+                  <button
+                    key={dt}
+                    type="button"
+                    onClick={() => setDepType(dt)}
+                    className={`flex-1 rounded py-0.5 text-[10px] font-medium transition-colors ${
+                      depType === dt
+                        ? "bg-jazz-purple text-white"
+                        : "bg-white border border-gray-200 text-gray-500 hover:bg-gray-100"
+                    }`}
+                    title={DEP_TYPE_LABELS[dt]}
+                  >
+                    {dt}
+                  </button>
+                ))}
+              </div>
+
+              {/* Lag input */}
+              <div className="flex items-center gap-1">
+                <label className="text-[10px] text-gray-500">Lag:</label>
+                <input
+                  type="number"
+                  value={depLag}
+                  onChange={(e) => setDepLag(Number(e.target.value))}
+                  className="w-14 rounded border border-gray-200 px-1.5 py-0.5 text-[10px] tabular-nums text-right outline-none focus:border-jazz-purple/40"
+                />
+                <span className="text-[10px] text-gray-400">months</span>
+              </div>
+
+              {/* Activity search */}
+              <div className="relative">
+                <Search
+                  size={10}
+                  className="absolute left-1.5 top-1.5 text-gray-400 pointer-events-none"
+                />
+                <input
+                  type="text"
+                  placeholder="Search activities..."
+                  value={depSearch}
+                  onChange={(e) => setDepSearch(e.target.value)}
+                  className="w-full rounded border border-gray-200 py-1 pl-5 pr-2 text-[10px] outline-none focus:border-jazz-purple/40"
+                />
+              </div>
+
+              {/* Activity list */}
+              <div className="max-h-24 overflow-y-auto rounded border border-gray-200 bg-white">
+                {filteredCandidates.length === 0 && (
+                  <p className="px-2 py-1.5 text-[10px] text-gray-400">No activities</p>
+                )}
+                {filteredCandidates.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => handleAddDep(a.id)}
+                    className="w-full text-left px-2 py-1 text-[10px] text-gray-700 hover:bg-blue-50 truncate"
+                  >
+                    {a.name}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDepPicker(false);
+                  setDepSearch("");
+                }}
+                className="w-full rounded py-0.5 text-[10px] text-gray-400 hover:text-gray-600"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Actions */}
         <div className="flex justify-end gap-2 pt-1">
           <button
@@ -212,6 +421,8 @@ export default function MilestoneMarker({
   milestone,
   columnWidth,
   rangeStart,
+  row,
+  slotHeight,
 }: MilestoneMarkerProps) {
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -222,14 +433,15 @@ export default function MilestoneMarker({
   const left =
     (milestone.month - rangeStart) * columnWidth + columnWidth / 2;
   const color = GATE_COLORS[milestone.gateType] ?? "#6b7280";
-  const size = 14;
+  const diamondSize = 10;
+  const topOffset = row * slotHeight;
 
   useEffect(() => {
     if (hovered && markerRef.current && !editing) {
       const rect = markerRef.current.getBoundingClientRect();
       setTooltipPos({
-        x: rect.left + rect.width / 2,
-        y: rect.bottom + 6,
+        x: rect.left + diamondSize / 2 + 4,
+        y: rect.bottom + 4,
       });
     }
   }, [hovered, editing]);
@@ -250,29 +462,38 @@ export default function MilestoneMarker({
   return (
     <div
       ref={markerRef}
-      className="absolute"
+      className="absolute flex items-center gap-1 cursor-pointer group"
       style={{
-        left: left - size / 2,
-        top: 2,
-        width: size,
-        height: size,
+        left: left - diamondSize / 2 - 2,
+        top: topOffset + (slotHeight - diamondSize) / 2 - 1,
+        height: diamondSize + 2,
       }}
       onMouseEnter={() => !editing && setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={handleClick}
     >
       {/* Diamond shape */}
       <div
-        className="w-full h-full rotate-45 cursor-pointer hover:scale-125 transition-transform"
+        className="shrink-0 rotate-45 group-hover:scale-125 transition-transform"
         style={{
+          width: diamondSize,
+          height: diamondSize,
           backgroundColor: color,
           boxShadow: milestone.isCriticalPath
-            ? `0 0 8px 2px ${color}66`
+            ? `0 0 6px 2px ${color}66`
             : editing
               ? `0 0 0 2px ${color}44`
               : "none",
         }}
-        onClick={handleClick}
       />
+
+      {/* Abbreviation label — always visible */}
+      <span
+        className="text-[9px] font-semibold leading-none whitespace-nowrap select-none"
+        style={{ color }}
+      >
+        {milestone.abbreviation}
+      </span>
 
       {/* Tooltip — only when hovering and NOT editing */}
       {hovered &&
@@ -289,10 +510,13 @@ export default function MilestoneMarker({
           >
             <div className="font-semibold">{milestone.name}</div>
             <div className="text-gray-300 text-[11px]">
-              {milestone.abbreviation} &middot; Month {milestone.month}
+              Month {Math.round(milestone.month * 100) / 100}
+              {milestone.dependencies.length > 0 && " (auto)"}
             </div>
             <div className="text-gray-400 text-[10px]">
-              <span className="capitalize">{milestone.gateType}</span> &middot; Click to edit
+              <span className="capitalize">{milestone.gateType}</span>
+              {milestone.dependencies.length > 0 && ` · ${milestone.dependencies.length} dep${milestone.dependencies.length > 1 ? "s" : ""}`}
+              {" "}· Click to edit
             </div>
             <div
               className="absolute left-1/2 -translate-x-1/2 -top-1 w-2 h-2 rotate-45 bg-gray-900/95"

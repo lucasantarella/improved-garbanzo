@@ -49,6 +49,7 @@ const MilestoneSchema = z.object({
   description: z.string(),
   gateType: z.enum(['approval', 'review', 'informational']),
   gateApprovers: z.array(z.string()),
+  dependencies: z.array(DependencySchema).optional().default([]),
 });
 
 const TimeConfigSchema = z.object({

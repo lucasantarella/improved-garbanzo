@@ -188,6 +188,7 @@ describe('Round-trip with user edits (edge cases)', () => {
       description: '',
       gateType: 'informational',
       gateApprovers: [],
+      dependencies: [],
     });
 
     const result = exportAndReimport(template);
