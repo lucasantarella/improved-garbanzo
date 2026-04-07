@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import type { Milestone } from "@/types";
 import { useWorkflowStore } from "@/store/workflowStore";
 import MilestoneMarker from "./MilestoneMarker";
@@ -12,6 +12,17 @@ interface TimelineHeaderProps {
   originLabel: string;
   milestones: Milestone[];
   zoomLevel: number;
+}
+
+/** Pixel threshold — milestones within this distance share a column and stack. */
+const STACK_THRESHOLD_PX = 20;
+/** Height of a single milestone row slot (diamond + label). */
+const SLOT_HEIGHT = 22;
+
+interface MilestoneSlot {
+  milestone: Milestone;
+  /** 0-based row within its stack group */
+  row: number;
 }
 
 export default function TimelineHeader({
@@ -36,6 +47,47 @@ export default function TimelineHeader({
     if (month < 0) return `${month}`;
     return `+${month}`;
   }
+
+  // Group milestones that overlap horizontally, assign stacking rows
+  const { slots, maxRow } = useMemo(() => {
+    if (milestones.length === 0) return { slots: [] as MilestoneSlot[], maxRow: 0 };
+
+    // Sort by month so we can greedily assign rows
+    const sorted = [...milestones].sort((a, b) => a.month - b.month);
+
+    // Each row tracks the rightmost pixel edge occupied so far
+    const rowEdges: number[] = [];
+    const result: MilestoneSlot[] = [];
+
+    for (const ms of sorted) {
+      const centerPx = (ms.month - rangeStart) * columnWidth + columnWidth / 2;
+      // Each marker occupies roughly STACK_THRESHOLD_PX * 2 of horizontal space
+      // (label text extends to the right)
+      const leftEdge = centerPx - 8;
+
+      // Find first row where this milestone doesn't overlap
+      let assignedRow = -1;
+      for (let r = 0; r < rowEdges.length; r++) {
+        if (leftEdge >= rowEdges[r] + STACK_THRESHOLD_PX) {
+          assignedRow = r;
+          break;
+        }
+      }
+      if (assignedRow === -1) {
+        assignedRow = rowEdges.length;
+        rowEdges.push(0);
+      }
+
+      // Reserve space: abbreviation label can be ~50px wide from the center
+      rowEdges[assignedRow] = centerPx + 50;
+
+      result.push({ milestone: ms, row: assignedRow });
+    }
+
+    return { slots: result, maxRow: rowEdges.length };
+  }, [milestones, rangeStart, columnWidth]);
+
+  const milestoneRowHeight = Math.max(SLOT_HEIGHT, maxRow * SLOT_HEIGHT);
 
   // Double-click on the milestone row to add a milestone at that month
   const handleDoubleClick = useCallback(
@@ -97,16 +149,19 @@ export default function TimelineHeader({
 
       {/* Milestone row — click to edit, double-click empty space to add */}
       <div
-        className="relative h-5 overflow-visible cursor-crosshair"
+        className="relative overflow-visible cursor-crosshair"
+        style={{ height: milestoneRowHeight }}
         onDoubleClick={handleDoubleClick}
         title="Double-click to add a milestone"
       >
-        {milestones.map((ms) => (
+        {slots.map(({ milestone: ms, row }) => (
           <MilestoneMarker
             key={ms.id}
             milestone={ms}
             columnWidth={columnWidth}
             rangeStart={rangeStart}
+            row={row}
+            slotHeight={SLOT_HEIGHT}
           />
         ))}
       </div>

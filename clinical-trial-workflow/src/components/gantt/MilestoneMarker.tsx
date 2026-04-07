@@ -10,6 +10,10 @@ interface MilestoneMarkerProps {
   milestone: Milestone;
   columnWidth: number;
   rangeStart: number;
+  /** Which stacking row this marker occupies (0 = top) */
+  row: number;
+  /** Height of each stacking slot in px */
+  slotHeight: number;
 }
 
 const GATE_COLORS: Record<string, string> = {
@@ -111,7 +115,6 @@ function MilestoneEditPopover({
       gateType,
       isCriticalPath,
     };
-    // Only allow manual month when there are no dependencies
     if (!hasDependencies) {
       updates.month = month;
     }
@@ -418,6 +421,8 @@ export default function MilestoneMarker({
   milestone,
   columnWidth,
   rangeStart,
+  row,
+  slotHeight,
 }: MilestoneMarkerProps) {
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -428,14 +433,15 @@ export default function MilestoneMarker({
   const left =
     (milestone.month - rangeStart) * columnWidth + columnWidth / 2;
   const color = GATE_COLORS[milestone.gateType] ?? "#6b7280";
-  const size = 14;
+  const diamondSize = 10;
+  const topOffset = row * slotHeight;
 
   useEffect(() => {
     if (hovered && markerRef.current && !editing) {
       const rect = markerRef.current.getBoundingClientRect();
       setTooltipPos({
-        x: rect.left + rect.width / 2,
-        y: rect.bottom + 6,
+        x: rect.left + diamondSize / 2 + 4,
+        y: rect.bottom + 4,
       });
     }
   }, [hovered, editing]);
@@ -456,29 +462,38 @@ export default function MilestoneMarker({
   return (
     <div
       ref={markerRef}
-      className="absolute"
+      className="absolute flex items-center gap-1 cursor-pointer group"
       style={{
-        left: left - size / 2,
-        top: 2,
-        width: size,
-        height: size,
+        left: left - diamondSize / 2 - 2,
+        top: topOffset + (slotHeight - diamondSize) / 2 - 1,
+        height: diamondSize + 2,
       }}
       onMouseEnter={() => !editing && setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={handleClick}
     >
       {/* Diamond shape */}
       <div
-        className="w-full h-full rotate-45 cursor-pointer hover:scale-125 transition-transform"
+        className="shrink-0 rotate-45 group-hover:scale-125 transition-transform"
         style={{
+          width: diamondSize,
+          height: diamondSize,
           backgroundColor: color,
           boxShadow: milestone.isCriticalPath
-            ? `0 0 8px 2px ${color}66`
+            ? `0 0 6px 2px ${color}66`
             : editing
               ? `0 0 0 2px ${color}44`
               : "none",
         }}
-        onClick={handleClick}
       />
+
+      {/* Abbreviation label — always visible */}
+      <span
+        className="text-[9px] font-semibold leading-none whitespace-nowrap select-none"
+        style={{ color }}
+      >
+        {milestone.abbreviation}
+      </span>
 
       {/* Tooltip — only when hovering and NOT editing */}
       {hovered &&
@@ -495,7 +510,7 @@ export default function MilestoneMarker({
           >
             <div className="font-semibold">{milestone.name}</div>
             <div className="text-gray-300 text-[11px]">
-              {milestone.abbreviation} &middot; Month {Math.round(milestone.month * 100) / 100}
+              Month {Math.round(milestone.month * 100) / 100}
               {milestone.dependencies.length > 0 && " (auto)"}
             </div>
             <div className="text-gray-400 text-[10px]">
