@@ -33,6 +33,7 @@ export interface Milestone {
   description: string;
   gateType: GateType;
   gateApprovers: string[];
+  dependencies: Dependency[];
 }
 
 export interface Dependency {
