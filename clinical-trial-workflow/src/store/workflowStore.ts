@@ -71,6 +71,110 @@ function computeMilestoneMonth(milestone: Milestone, activities: Activity[]): nu
   return hasValid ? latest : null;
 }
 
+/**
+ * Compute the earliest allowed start for an activity based on its dependencies.
+ * Returns -Infinity if the activity has no valid dependencies (i.e. unconstrained).
+ */
+function computeEarliestStart(activity: Activity, actMap: Map<string, Activity>): number {
+  let earliest = -Infinity;
+
+  for (const dep of activity.dependencies) {
+    const pred = actMap.get(dep.predecessorId);
+    if (!pred) continue;
+
+    let candidate: number;
+    switch (dep.type) {
+      case 'FS':
+        candidate = pred.endMonth + dep.lagMonths;
+        break;
+      case 'SS':
+        candidate = pred.startMonth + dep.lagMonths;
+        break;
+      case 'FF':
+        // successor must finish after predecessor finishes + lag
+        candidate = pred.endMonth + dep.lagMonths - activity.durationMonths;
+        break;
+      case 'SF':
+        // successor must finish after predecessor starts + lag
+        candidate = pred.startMonth + dep.lagMonths - activity.durationMonths;
+        break;
+    }
+    earliest = Math.max(earliest, candidate);
+  }
+
+  return earliest;
+}
+
+/**
+ * Propagate timing changes forward through the dependency graph.
+ * When an activity moves or resizes, all transitive successors are pushed
+ * forward so that dependency constraints are satisfied.
+ * Also recomputes dependent milestone months.
+ *
+ * Uses topological BFS starting from the changed activity.
+ */
+function propagateDependencies(
+  changedId: string,
+  activities: Activity[],
+  milestones: Milestone[],
+): void {
+  // Build lookup map and successor adjacency list
+  const actMap = new Map<string, Activity>();
+  for (const a of activities) actMap.set(a.id, a);
+
+  // successors: predecessorId → list of successor activity objects
+  const successors = new Map<string, Activity[]>();
+  for (const a of activities) {
+    for (const dep of a.dependencies) {
+      let list = successors.get(dep.predecessorId);
+      if (!list) {
+        list = [];
+        successors.set(dep.predecessorId, list);
+      }
+      list.push(a);
+    }
+  }
+
+  // BFS from changedId through successor graph
+  const queue: string[] = [changedId];
+  const visited = new Set<string>();
+  visited.add(changedId);
+
+  while (queue.length > 0) {
+    const predId = queue.shift()!;
+    const succs = successors.get(predId);
+    if (!succs) continue;
+
+    for (const succ of succs) {
+      const earliest = computeEarliestStart(succ, actMap);
+      if (earliest > succ.startMonth) {
+        succ.startMonth = earliest;
+        succ.endMonth = succ.startMonth + succ.durationMonths;
+
+        // This successor moved — enqueue it so its own successors get checked
+        if (!visited.has(succ.id)) {
+          visited.add(succ.id);
+          queue.push(succ.id);
+        }
+      } else if (!visited.has(succ.id)) {
+        // Even if this successor didn't move, still check further downstream
+        // (an FF/SF dependency deeper in the graph might still be violated)
+        visited.add(succ.id);
+        queue.push(succ.id);
+      }
+    }
+  }
+
+  // Recompute milestones that depend on any activity that was visited
+  for (const ms of milestones) {
+    if (ms.dependencies.length === 0) continue;
+    if (ms.dependencies.some((d) => visited.has(d.predecessorId))) {
+      const computed = computeMilestoneMonth(ms, activities);
+      if (computed !== null) ms.month = computed;
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Store types
 // ---------------------------------------------------------------------------
@@ -218,13 +322,8 @@ export const useWorkflowStore = create<WorkflowState>()(
         if ('startMonth' in updates || 'durationMonths' in updates) {
           activity.endMonth = activity.startMonth + activity.durationMonths;
 
-          // Recompute any milestones that depend on this activity
-          for (const ms of state.template.milestones) {
-            if (ms.dependencies.some((d: Dependency) => d.predecessorId === id)) {
-              const computed = computeMilestoneMonth(ms, state.template.activities);
-              if (computed !== null) ms.month = computed;
-            }
-          }
+          // Propagate timing changes to all downstream dependents
+          propagateDependencies(id, state.template.activities, state.template.milestones);
         }
 
         state.template.updatedAt = new Date().toISOString();
@@ -380,6 +479,10 @@ export const useWorkflowStore = create<WorkflowState>()(
         if (!activity) return;
 
         activity.dependencies.push(dep);
+
+        // Enforce the new constraint immediately — push the successor forward if needed
+        propagateDependencies(dep.predecessorId, state.template.activities, state.template.milestones);
+
         state.template.updatedAt = new Date().toISOString();
         state.isDirty = true;
       });
