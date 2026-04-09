@@ -431,7 +431,7 @@ export default function MilestoneMarker({
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
 
   const left =
-    (milestone.month - rangeStart) * columnWidth + columnWidth / 2;
+    (milestone.month - rangeStart) * columnWidth;
   const color = GATE_COLORS[milestone.gateType] ?? "#6b7280";
   const diamondSize = 10;
   const topOffset = row * slotHeight;
@@ -525,13 +525,16 @@ export default function MilestoneMarker({
           document.body,
         )}
 
-      {/* Edit popover */}
+      {/* Edit popover — wrapped in stopPropagation to prevent React portal event bubbling
+           from re-triggering the parent onClick (which would reopen the popover) */}
       {editing && popoverPos && (
-        <MilestoneEditPopover
-          milestone={milestone}
-          position={popoverPos}
-          onClose={() => setEditing(false)}
-        />
+        <div onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+          <MilestoneEditPopover
+            milestone={milestone}
+            position={popoverPos}
+            onClose={() => setEditing(false)}
+          />
+        </div>
       )}
     </div>
   );
