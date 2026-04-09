@@ -15,9 +15,45 @@ interface TimelineHeaderProps {
 }
 
 /** Pixel threshold — milestones within this distance share a column and stack. */
-const STACK_THRESHOLD_PX = 20;
+export const STACK_THRESHOLD_PX = 20;
 /** Height of a single milestone row slot (diamond + label). */
-const SLOT_HEIGHT = 22;
+export const SLOT_HEIGHT = 22;
+/** Height of the month labels row. */
+export const MONTH_ROW_HEIGHT = 28;
+/** Height of the day sub-labels row (zoom level 4 only). */
+export const DAY_ROW_HEIGHT = 16;
+
+/**
+ * Compute how many stacking rows milestones need.
+ * Exported so GanttView can compute the total header height
+ * to keep the left label column in sync.
+ */
+export function computeMilestoneRowCount(
+  milestones: Milestone[],
+  rangeStart: number,
+  columnWidth: number,
+): number {
+  if (milestones.length === 0) return 1;
+  const sorted = [...milestones].sort((a, b) => a.month - b.month);
+  const rowEdges: number[] = [];
+  for (const ms of sorted) {
+    const centerPx = (ms.month - rangeStart) * columnWidth + columnWidth / 2;
+    const leftEdge = centerPx - 8;
+    let assignedRow = -1;
+    for (let r = 0; r < rowEdges.length; r++) {
+      if (leftEdge >= rowEdges[r] + STACK_THRESHOLD_PX) {
+        assignedRow = r;
+        break;
+      }
+    }
+    if (assignedRow === -1) {
+      assignedRow = rowEdges.length;
+      rowEdges.push(0);
+    }
+    rowEdges[assignedRow] = centerPx + 50;
+  }
+  return Math.max(1, rowEdges.length);
+}
 
 interface MilestoneSlot {
   milestone: Milestone;

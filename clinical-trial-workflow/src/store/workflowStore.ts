@@ -398,7 +398,17 @@ export const useWorkflowStore = create<WorkflowState>()(
         };
 
         if (afterIndex >= 0) {
-          state.template.activities.splice(afterIndex + 1, 0, newActivity);
+          // Find the correct splice point: scan forward from afterIndex to find
+          // the next activity in the SAME lane. Insert right before it so the
+          // new activity appears visually between afterActivity and the next
+          // same-lane activity. If no further same-lane activity exists, insert
+          // right after afterIndex (end of lane in global order).
+          const acts = state.template.activities;
+          let insertAt = afterIndex + 1;
+          while (insertAt < acts.length && acts[insertAt].swimLaneId !== swimLaneId) {
+            insertAt++;
+          }
+          acts.splice(insertAt, 0, newActivity);
         } else {
           state.template.activities.push(newActivity);
         }

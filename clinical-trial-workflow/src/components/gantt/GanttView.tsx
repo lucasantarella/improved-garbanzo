@@ -10,7 +10,12 @@ import {
 import type { Activity, SwimLane } from "@/types";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
 import ActivityBar from "./ActivityBar";
-import TimelineHeader from "./TimelineHeader";
+import TimelineHeader, {
+  computeMilestoneRowCount,
+  SLOT_HEIGHT,
+  MONTH_ROW_HEIGHT,
+  DAY_ROW_HEIGHT,
+} from "./TimelineHeader";
 import DependencyArrows from "./DependencyArrows";
 
 const ROW_HEIGHT = 36;
@@ -70,6 +75,14 @@ export default function GanttView() {
   const columnWidth = zoomLevel === 1 ? 40 : zoomLevel === 2 ? 80 : zoomLevel === 3 ? 160 : 480;
   const totalMonths = timeConfig.rangeEnd - timeConfig.rangeStart + 1;
   const timelineWidth = totalMonths * columnWidth;
+
+  // Compute timeline header height so the left label spacer matches exactly.
+  // Includes: month row + optional day row + milestone row + 1px border-b.
+  const headerHeight = useMemo(() => {
+    const msRows = computeMilestoneRowCount(milestones, timeConfig.rangeStart, columnWidth);
+    const milestoneRowHeight = Math.max(SLOT_HEIGHT, msRows * SLOT_HEIGHT);
+    return MONTH_ROW_HEIGHT + (zoomLevel === 4 ? DAY_ROW_HEIGHT : 0) + milestoneRowHeight + 1;
+  }, [milestones, timeConfig.rangeStart, columnWidth, zoomLevel]);
 
   // Track which row gap the mouse is hovering over (for the insert button)
   const [hoveredGap, setHoveredGap] = useState<{ index: number; laneId: string; afterActivityId: string } | null>(null);
@@ -214,7 +227,10 @@ export default function GanttView() {
         style={{ width: LABEL_WIDTH }}
       >
         {/* Spacer matching timeline header height */}
-        <div className="h-12 border-b border-gray-200 flex items-end px-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+        <div
+          className="border-b border-gray-200 flex items-end px-2 pb-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider shrink-0"
+          style={{ height: headerHeight }}
+        >
           Swim Lanes
         </div>
 
