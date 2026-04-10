@@ -2,6 +2,7 @@
 
 import React from "react";
 import type { Dependency, Activity } from "@/types";
+import { formatLag } from "@/utils/timeUtils";
 
 interface DependencyChipsProps {
   dependencies: Dependency[];
@@ -30,7 +31,7 @@ export default function DependencyChips({
 
   // Show count badge if more than 1, with tooltip listing all
   const allTooltip = dependencies
-    .map((d) => `${getName(d.predecessorId)} (${d.type})`)
+    .map((d) => `${getName(d.predecessorId)} (${d.type}${d.lagMonths !== 0 ? `, lag ${formatLag(d.lagMonths)}` : ""})`)
     .join("\n");
 
   if (dependencies.length === 1) {
@@ -38,7 +39,7 @@ export default function DependencyChips({
     return (
       <span
         className="inline-flex items-center gap-1 max-w-full overflow-hidden"
-        title={`${getName(dep.predecessorId)} (${dep.type}, lag ${dep.lagMonths})`}
+        title={`${getName(dep.predecessorId)} (${dep.type}${dep.lagMonths !== 0 ? `, lag ${formatLag(dep.lagMonths)}` : ""})`}
       >
         <span
           className={`shrink-0 rounded px-1 py-px text-[9px] font-bold leading-none ${typeColors[dep.type] ?? "bg-gray-200 text-gray-600"}`}

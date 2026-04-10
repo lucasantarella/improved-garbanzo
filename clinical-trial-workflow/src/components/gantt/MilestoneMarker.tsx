@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Trash2, X, Plus, Search } from "lucide-react";
 import type { Milestone, GateType, DependencyType } from "@/types";
 import { useWorkflowStore } from "@/store/workflowStore";
+import { formatLag } from "@/utils/timeUtils";
 
 interface MilestoneMarkerProps {
   milestone: Milestone;
@@ -291,7 +292,7 @@ function MilestoneEditPopover({
                   </span>
                   {dep.lagMonths !== 0 && (
                     <span className="text-[9px] text-gray-400">
-                      {dep.lagMonths > 0 ? "+" : ""}{dep.lagMonths}m
+                      {formatLag(dep.lagMonths)}
                     </span>
                   )}
                   <button

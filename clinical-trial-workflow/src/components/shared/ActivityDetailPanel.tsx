@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useWorkflowStore, useCriticalPathIds } from "@/store/workflowStore";
 import { X, Plus, ChevronDown } from "lucide-react";
 import DependencyEditor from "./DependencyEditor";
+import { formatLag } from "@/utils/timeUtils";
 
 const DEP_TYPE_COLORS: Record<string, string> = {
   FS: "bg-blue-100 text-blue-700",
@@ -289,8 +290,7 @@ export default function ActivityDetailPanel() {
                     </span>
                     {dep.lagMonths !== 0 && (
                       <span className="shrink-0 text-xs text-gray-500">
-                        {dep.lagMonths > 0 ? "+" : ""}
-                        {dep.lagMonths}m
+                        {formatLag(dep.lagMonths)}
                       </span>
                     )}
                     <button
