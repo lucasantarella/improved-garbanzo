@@ -100,7 +100,11 @@ export function computeCriticalPath(activities: Activity[]): CpmResult[] {
 
   for (const id of topoOrder) {
     const act = activityMap.get(id)!;
-    let earlyStart = act.startMonth;
+    // Activities WITH valid dependencies derive their start purely from the
+    // dependency chain. Only root activities (no dependencies or no valid
+    // predecessors) use their stored startMonth as the anchor.
+    const hasValidDep = act.dependencies.some((d) => activityMap.has(d.predecessorId));
+    let earlyStart = hasValidDep ? -Infinity : act.startMonth;
 
     // Check all predecessors
     for (const dep of act.dependencies) {
